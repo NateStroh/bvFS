@@ -23,6 +23,19 @@
  *     - Create the partition file (on disk) when bv_init is called if the file
  *       doesn't already exist.
  */
+
+#include <time.h>
+#include <math.h>
+//Structs
+struct iNode{
+  char name[32];
+  int numBytes;
+  time_t time;
+  //File can only be 128 blocks long
+  unsigned short blockAddresses[128];
+
+}typedef iNode;
+
 //Constants
 //BLOCK_SIZE and FILE_NAME_SIZE are Bytes
 //PARTION_SIZE and FILE_SIZE are Blocks
@@ -33,6 +46,8 @@ const int FILE_SIZE = 128;
 const int MAX_FILES = 256;
 
 //Globals
+iNode iNodeArray[256];
+int num_files = 0;
 
 // Prototypes
 int bv_init(const char *fs_fileName);
@@ -71,6 +86,7 @@ void bv_ls();
  *           etc.). Also, print a meaningful error to stderr prior to returning.
  */
 int bv_init(const char *fs_fileName) {
+  /*
   FILE *filePtr;
   if( access(fs_fileName, F_OK) != -1){
     //file exists 
@@ -78,7 +94,18 @@ int bv_init(const char *fs_fileName) {
     //file doesnt exist
   }
   filePtr = fopen(fs_fileName, "w")
+  */
 
+  //if file doesnt exist 
+  //Create the file 
+  //Write 4 bytes for superblock
+  
+  //
+    
+  //Seek to BLOCKSIZE
+
+  //Write 256 blocks of empty iNodes
+  
 }
 
 
@@ -236,6 +263,8 @@ int bv_read(int bvfs_FD, void *buf, size_t count) {
  *           Also, print a meaningful error to stderr prior to returning.
  */
 int bv_unlink(const char* fileName) {
+  //TODO JUST DELETE IT
+  //ORRR WE COULD WRITE EVERY BIT TO 0
 }
 
 
@@ -271,4 +300,9 @@ int bv_unlink(const char* fileName) {
  *   void
  */
 void bv_ls() {
+  printf("| %d Files\n", NUM_FILES);
+  for(int i=0; i<NUM_FILES; i++){
+    iNode curr = iNode[i]; 
+    printf("| bytes: %d, blocks: %d, %s, %c\n", curr.numBytes,  ceil(curr.numBytes/BLOCK_SIZE), curr.time, curr.name);
+  }
 }
