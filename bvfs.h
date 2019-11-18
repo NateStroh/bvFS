@@ -86,26 +86,35 @@ void bv_ls();
  *           etc.). Also, print a meaningful error to stderr prior to returning.
  */
 int bv_init(const char *fs_fileName) {
-  /*
-  FILE *filePtr;
-  if( access(fs_fileName, F_OK) != -1){
-    //file exists 
-  }else{ 
-    //file doesnt exist
-  }
-  filePtr = fopen(fs_fileName, "w")
-  */
+  
+  int pFD = open(partitionName, O_CREAT | O_RDWR | O_EXCL, 0644);
+  if (pFD < 0) {
+    if (errno == EEXIST) {
+      // File already exists. Open it and read info (integer) back
+      pFD = open(partitionName, O_CREAT | O_RDWR , S_IRUSR | S_IWUSR);
 
+      read(pFD, (void*)&num, sizeof(num));
+
+    }
+    else {
+      // Something bad must have happened... check errno?
+    }
+
+  } else {
+    // File did not previously exist but it does now. Write data to it
+    write(pFD, (void*)&num, sizeof(num));
+    printf("Created File\n");
+  }
   //if file doesnt exist 
   //Create the file 
   //Write 4 bytes for superblock
-  
+
   //
-    
+
   //Seek to BLOCKSIZE
 
   //Write 256 blocks of empty iNodes
-  
+
 }
 
 
