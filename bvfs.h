@@ -33,6 +33,10 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 
+
+//TODO: superblock struct
+
+//TODO: padding
 //Structs
 struct iNode{
   short pos;
@@ -181,8 +185,14 @@ int bv_init(const char *fs_fileName) {
  *           returning.
  */
 int bv_destroy() {
+  iNode node;
   //write iNodes to disk
+  for(int i=0; i<256; i++){
+    node = 
+  }
 
+  //close file descriptor
+  close(pFD);
 }
 
 // Available Modes for bvfs (see bv_open below)
