@@ -48,7 +48,7 @@ const int MAX_FILES = 256;
 //Globals
 iNode iNodeArray[256];
 int num_files = 0;
-int SUPERPTR = 257;
+short SUPERPTR = 257;
 // Prototypes
 int bv_init(const char *fs_fileName);
 int bv_destroy();
