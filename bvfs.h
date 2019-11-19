@@ -32,7 +32,7 @@ struct iNode{
   int numBytes;
   time_t time;
   //File can only be 128 blocks long
-  unsigned short blockAddresses[128];
+  short blockAddresses[128];
 
 }typedef iNode;
 
@@ -48,7 +48,7 @@ const int MAX_FILES = 256;
 //Globals
 iNode iNodeArray[256];
 int num_files = 0;
-
+int SUPERPTR = 257;
 // Prototypes
 int bv_init(const char *fs_fileName);
 int bv_destroy();
@@ -87,14 +87,25 @@ void bv_ls();
  */
 int bv_init(const char *fs_fileName) {
   
-  int pFD = open(partitionName, O_CREAT | O_RDWR | O_EXCL, 0644);
+  int pFD = open(fs_fileName, O_CREAT | O_RDWR | O_EXCL, 0644);
   if (pFD < 0) {
     if (errno == EEXIST) {
       // File already exists. Open it and read info (integer) back
-      pFD = open(partitionName, O_CREAT | O_RDWR , S_IRUSR | S_IWUSR);
+      pFD = open(fs_fileName, O_CREAT | O_RDWR , S_IRUSR | S_IWUSR);
 
-      read(pFD, (void*)&num, sizeof(num));
+      //Read super block ptr
+      read(pFD, (void*)&SUPERPTR, sizeof(short));
+      //Seek to second block
+      seek(pFD, (BLOCK_SIZE -sizeof(short)), SEEK_CUR);
+      short pos = 0;
 
+      //Read iNodes from Disk
+      for(int i=0; i<256; i++){
+        iNode newNode;
+        read(pFD, (void*)&newNode, sizeof(iNode));
+        seek(pFD, (BLOCK_SIZE -sizeof(iNode)), SEEK_CUR);
+        iNodeArray[i] = newNode;
+      }
     }
     else {
       // Something bad must have happened... check errno?
@@ -273,9 +284,28 @@ int bv_read(int bvfs_FD, void *buf, size_t count) {
  */
 int bv_unlink(const char* fileName) {
   //TODO JUST DELETE IT
-  //ORRR WE COULD WRITE EVERY BIT TO 0
-}
 
+  iNode *file;
+  //Loop through iNode Array
+  for(int i=0; i<256; i++;){
+    if(!strcmp(iNodeArray[i]->name, fileName)){
+      printf("Found the correct file\n");
+      file = iNodeArray[i];
+    }
+  }
+  //Loop through blockAddresses contained in the iNode while i< numberOfBlocks
+  for(int i=0; i<ceil(curr.numBytes/BLOCK_SIZE); i++;){
+    
+    //Array will always be contiguous
+    if(file->blockAddresses[i] == NULL){
+      break;
+    }else{
+      //Add address of free blocks to the superblock
+      for(int j=0; j
+    }
+  }
+
+}
 
 
 
@@ -309,8 +339,9 @@ int bv_unlink(const char* fileName) {
  *   void
  */
 void bv_ls() {
-  printf("| %d Files\n", NUM_FILES);
-  for(int i=0; i<NUM_FILES; i++){
+  printf("| %d Files\n", num_files);
+  //Loop through iNodes and print info about them
+  for(int i=0; i<MAX_FILES; i++){
     iNode curr = iNode[i]; 
     printf("| bytes: %d, blocks: %d, %s, %c\n", curr.numBytes,  ceil(curr.numBytes/BLOCK_SIZE), curr.time, curr.name);
   }
