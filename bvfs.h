@@ -28,6 +28,7 @@
 #include <math.h>
 //Structs
 struct iNode{
+  short pos;
   char name[32];
   int numBytes;
   time_t time;
@@ -35,6 +36,7 @@ struct iNode{
   short blockAddresses[128];
 
 }typedef iNode;
+
 
 //Constants
 //BLOCK_SIZE and FILE_NAME_SIZE are Bytes
@@ -48,7 +50,10 @@ const int MAX_FILES = 256;
 //Globals
 iNode iNodeArray[256];
 int num_files = 0;
+//offset(address) of first block dedicated to pointing to free blocks
 short SUPERPTR = 257;
+
+
 // Prototypes
 int bv_init(const char *fs_fileName);
 int bv_destroy();
@@ -59,7 +64,13 @@ int bv_read(int bvfs_FD, void *buf, size_t count);
 int bv_unlink(const char* fileName);
 void bv_ls();
 
+void memStrucs(){
+  //build and set head
+  
+  //build linked list of iNodes
+  
 
+}
 
 
 /*
@@ -112,25 +123,43 @@ int bv_init(const char *fs_fileName) {
     }
 
   } else {
-    // File did not previously exist but it does now. Write data to it
-    write(pFD, (void*)&num, sizeof(num));
+    // File did not previously exist but it does now. Write data to it 
+     
+    //set up partition
+    //write 2 bytes for first superBlock ptr
+    write(pFD, (void*)((short) 257), sizeof(short));
+    //seek to next block
+    lseek(pFD, 510, SEEK_CURR);
+
+    //write inodes
+    iNode node;
+    for(int i=0; i<256; i++){
+      //set iNode name to default of NULL
+      node.name = "NULL\0";
+      node.pos = i+1;
+
+      //write it to file
+      write(pFD, (void*)node, sizeof(iNode));
+
+      //seek to next iNode location
+      lseek(pFD, 512 - sizeof(iNode), SEEK_CURR); 
+    }
+
+    //write remaining superBlock pointers - 2 bytes pointing to the next super block
+    for(int i=257; i<16384; i++){
+      //write short of next free block (very next block in this case)
+      write(pFD, (void*)(i+1), sizeof(short));
+      //seek to the next block
+      lseek(pFD, 510, SEEK_CURR);
+    }
+    
+    //TODO:
+    //set up all data structures in memory
+    
+
     printf("Created File\n");
   }
-  //if file doesnt exist 
-  //Create the file 
-  //Write 4 bytes for superblock
-
-  //
-
-  //Seek to BLOCKSIZE
-
-  //Write 256 blocks of empty iNodes
-
 }
-
-
-
-
 
 
 /*
@@ -185,11 +214,6 @@ int BV_WTRUNC = 2;
 int bv_open(const char *fileName, int mode) {
 }
 
-
-
-
-
-
 /*
  * int bv_close(int bvfs_FD);
  *
@@ -208,13 +232,9 @@ int bv_open(const char *fileName, int mode) {
  *           prior to returning.
  */
 int bv_close(int bvfs_FD) {
+  //write all iNodes back to the disk
+
 }
-
-
-
-
-
-
 
 /*
  * int bv_write(int bvfs_FD, const void *buf, size_t count);
@@ -236,11 +256,6 @@ int bv_close(int bvfs_FD) {
 int bv_write(int bvfs_FD, const void *buf, size_t count) {
 }
 
-
-
-
-
-
 /*
  * int bv_read(int bvfs_FD, void *buf, size_t count);
  *
@@ -260,12 +275,6 @@ int bv_write(int bvfs_FD, const void *buf, size_t count) {
  */
 int bv_read(int bvfs_FD, void *buf, size_t count) {
 }
-
-
-
-
-
-
 
 /*
  * int bv_unlink(const char* fileName);
