@@ -64,14 +64,21 @@ int bv_read(int bvfs_FD, void *buf, size_t count);
 int bv_unlink(const char* fileName);
 void bv_ls();
 
-void memStrucs(){
-  //build and set head
-  
-  //build linked list of iNodes
-  
+void buildMemStructs(int id){
+  //Read super block ptr
+  read(id, (void*)&SUPERPTR, sizeof(short));
+  //Seek to second block
+  seek(id, (BLOCK_SIZE -sizeof(short)), SEEK_CUR);
+  short pos = 0;
 
+  //Read iNodes from Disk
+  for(int i=0; i<256; i++){
+    iNode newNode;
+    read(id, (void*)&newNode, sizeof(iNode));
+    seek(id, (BLOCK_SIZE - sizeof(iNode)), SEEK_CUR);
+    iNodeArray[i] = newNode;
+  }
 }
-
 
 /*
  * int bv_init(const char *fs_fileName);
@@ -97,26 +104,15 @@ void memStrucs(){
  *           etc.). Also, print a meaningful error to stderr prior to returning.
  */
 int bv_init(const char *fs_fileName) {
-  
+
   int pFD = open(fs_fileName, O_CREAT | O_RDWR | O_EXCL, 0644);
   if (pFD < 0) {
     if (errno == EEXIST) {
       // File already exists. Open it and read info (integer) back
       pFD = open(fs_fileName, O_CREAT | O_RDWR , S_IRUSR | S_IWUSR);
 
-      //Read super block ptr
-      read(pFD, (void*)&SUPERPTR, sizeof(short));
-      //Seek to second block
-      seek(pFD, (BLOCK_SIZE -sizeof(short)), SEEK_CUR);
-      short pos = 0;
-
-      //Read iNodes from Disk
-      for(int i=0; i<256; i++){
-        iNode newNode;
-        read(pFD, (void*)&newNode, sizeof(iNode));
-        seek(pFD, (BLOCK_SIZE -sizeof(iNode)), SEEK_CUR);
-        iNodeArray[i] = newNode;
-      }
+      //read files from 
+      buildMemStructs(pFD);
     }
     else {
       // Something bad must have happened... check errno?
@@ -124,8 +120,7 @@ int bv_init(const char *fs_fileName) {
 
   } else {
     // File did not previously exist but it does now. Write data to it 
-     
-    //set up partition
+
     //write 2 bytes for first superBlock ptr
     write(pFD, (void*)((short) 257), sizeof(short));
     //seek to next block
@@ -152,10 +147,9 @@ int bv_init(const char *fs_fileName) {
       //seek to the next block
       lseek(pFD, 510, SEEK_CURR);
     }
-    
-    //TODO:
+
     //set up all data structures in memory
-    
+    buildMemStructs(pFD);
 
     printf("Created File\n");
   }
@@ -176,13 +170,9 @@ int bv_init(const char *fs_fileName) {
  *           returning.
  */
 int bv_destroy() {
+
+
 }
-
-
-
-
-
-
 
 // Available Modes for bvfs (see bv_open below)
 int BV_RDONLY = 0;
@@ -212,6 +202,8 @@ int BV_WTRUNC = 2;
  *           stderr prior to returning.
  */
 int bv_open(const char *fileName, int mode) {
+
+
 }
 
 /*
@@ -232,7 +224,6 @@ int bv_open(const char *fileName, int mode) {
  *           prior to returning.
  */
 int bv_close(int bvfs_FD) {
-  //write all iNodes back to the disk
 
 }
 
@@ -254,6 +245,8 @@ int bv_close(int bvfs_FD) {
  *           prior to returning.
  */
 int bv_write(int bvfs_FD, const void *buf, size_t count) {
+
+
 }
 
 /*
@@ -274,6 +267,8 @@ int bv_write(int bvfs_FD, const void *buf, size_t count) {
  *           prior to returning.
  */
 int bv_read(int bvfs_FD, void *buf, size_t count) {
+
+
 }
 
 /*
@@ -304,22 +299,18 @@ int bv_unlink(const char* fileName) {
   }
   //Loop through blockAddresses contained in the iNode while i< numberOfBlocks
   for(int i=0; i<ceil(curr.numBytes/BLOCK_SIZE); i++;){
-    
+
     //Array will always be contiguous
     if(file->blockAddresses[i] == NULL){
       break;
     }else{
       //Add address of free blocks to the superblock
-      for(int j=0; j
+      for(int j=0; j<100/*FIXME*/; j++){
+
+      }
     }
   }
-
 }
-
-
-
-
-
 
 /*
  * void bv_ls();
@@ -352,6 +343,8 @@ void bv_ls() {
   //Loop through iNodes and print info about them
   for(int i=0; i<MAX_FILES; i++){
     iNode curr = iNode[i]; 
-    printf("| bytes: %d, blocks: %d, %s, %c\n", curr.numBytes,  ceil(curr.numBytes/BLOCK_SIZE), curr.time, curr.name);
+    if(!strcmp(curr.name, "NULL")){
+      printf("| bytes: %d, blocks: %d, %s, %c\n", curr.numBytes,  ceil(curr.numBytes/BLOCK_SIZE), curr.time, curr.name);
+    }
   }
 }
