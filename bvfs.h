@@ -42,6 +42,7 @@ struct iNode{
   short pos;
   char name[32];
   int numBytes;
+  short numBlocks;
   time_t time;
   //File can only be 128 blocks long
   short blockAddresses[128];
@@ -61,6 +62,7 @@ const int MAX_FILES = 256;
 //Globals
 iNode iNodeArray[256];
 int num_files = 0;
+int pFD;
 //offset(address) of first block dedicated to pointing to free blocks
 short SUPERPTR = 257;
 
@@ -116,7 +118,7 @@ void buildMemStructs(int id){
  */
 int bv_init(const char *fs_fileName) {
 
-  int pFD = open(fs_fileName, O_CREAT | O_RDWR | O_EXCL, 0644);
+  pFD = open(fs_fileName, O_CREAT | O_RDWR | O_EXCL, 0644);
   if (pFD < 0) {
     if (errno == EEXIST) {
       // File already exists. Open it and read info (integer) back
@@ -331,19 +333,16 @@ int bv_unlink(const char* fileName) {
   }
 
   //Loop through blockAddresses contained in the iNode while i< numberOfBlocks
-  for(int i=0; i<ceil(curr.numBytes/BLOCK_SIZE); i++;){
-
-    //Array will always be contiguous
-    //FIXME: what is this?
-    if(file->blockAddresses[i] == NULL){
-      break;
-    }else{
-      //Add address of free blocks to the superblock
-      for(int j=0; j<100/*FIXME*/; j++){
-
-      }
-    }
+  
+  for(int i=0; i<file.numBlocks; i++;){
+    //Seek to one of the file blocks (blockAddresses[i])
+    lseek(pFD, (BLOCK_SIZE * blockAddresses[i]), SEEK_CUR);
+    //Write blockAddresses[i+1] to the block we seeked to 
+    write(pFD, (void *)&blockAddresses[i+1], sizeof(short));
   }
+
+  lseek(pFD, (BLOCK_SIZE * blockAddresses[file.numBlocks]), SEEK_CUR);
+  
   return 0;
 }
 
@@ -379,7 +378,7 @@ void bv_ls() {
   for(int i=0; i<MAX_FILES; i++){
     iNode curr = iNode[i]; 
     if(!strcmp(curr.name, "NULL")){
-      printf("| bytes: %d, blocks: %d, %s, %c\n", curr.numBytes,  ceil(curr.numBytes/BLOCK_SIZE), curr.time, curr.name);
+      printf("| bytes: %d, blocks: %d, %.24s, %c\n", curr.numBytes,  ceil(curr.numBytes/BLOCK_SIZE), curr.time, curr.name);
     }
   }
 }
