@@ -23,9 +23,16 @@
  *     - Create the partition file (on disk) when bv_init is called if the file
  *       doesn't already exist.
  */
-
 #include <time.h>
 #include <math.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <unistd.h>
+#include <errno.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+
 //Structs
 struct iNode{
   short pos;
@@ -115,7 +122,11 @@ int bv_init(const char *fs_fileName) {
       buildMemStructs(pFD);
     }
     else {
+      // TODO: no clue if this is right just yet
       // Something bad must have happened... check errno?
+      char *err = strerror(errno);
+      write(2, err, strlen(err));
+      write(1, "\n", 1);
     }
 
   } else {
@@ -170,7 +181,7 @@ int bv_init(const char *fs_fileName) {
  *           returning.
  */
 int bv_destroy() {
-
+  //write iNodes to disk
 
 }
 
@@ -202,6 +213,11 @@ int BV_WTRUNC = 2;
  *           stderr prior to returning.
  */
 int bv_open(const char *fileName, int mode) {
+  //check if we need to create the file or not
+
+  //check mode
+
+  //
 
 
 }
@@ -224,6 +240,7 @@ int bv_open(const char *fileName, int mode) {
  *           prior to returning.
  */
 int bv_close(int bvfs_FD) {
+  //check if file exits - if not return -1
 
 }
 
@@ -267,7 +284,9 @@ int bv_write(int bvfs_FD, const void *buf, size_t count) {
  *           prior to returning.
  */
 int bv_read(int bvfs_FD, void *buf, size_t count) {
-
+  //check if file is open
+  
+  //
 
 }
 
@@ -287,9 +306,7 @@ int bv_read(int bvfs_FD, void *buf, size_t count) {
  *           Also, print a meaningful error to stderr prior to returning.
  */
 int bv_unlink(const char* fileName) {
-  //TODO JUST DELETE IT
-
-  iNode *file;
+  iNode *file = NULL;
   //Loop through iNode Array
   for(int i=0; i<256; i++;){
     if(!strcmp(iNodeArray[i]->name, fileName)){
@@ -297,10 +314,17 @@ int bv_unlink(const char* fileName) {
       file = iNodeArray[i];
     }
   }
+
+  //if file never got set, we didn't have that filename - so return -1
+  if(file == NULL){
+    return -1;
+  }
+
   //Loop through blockAddresses contained in the iNode while i< numberOfBlocks
   for(int i=0; i<ceil(curr.numBytes/BLOCK_SIZE); i++;){
 
     //Array will always be contiguous
+    //FIXME: what is this?
     if(file->blockAddresses[i] == NULL){
       break;
     }else{
@@ -310,6 +334,7 @@ int bv_unlink(const char* fileName) {
       }
     }
   }
+  return 0;
 }
 
 /*
