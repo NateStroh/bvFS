@@ -36,7 +36,16 @@
 
 //TODO: superblock struct
 
-//TODO: padding
+
+//TODO: fileDescriptor struct
+struct fdTable{
+  int fileDescriptor;
+  int cursor;
+  
+} typedef fdTable;
+
+
+//TODO: padding?
 //Structs
 struct iNode{
   short pos;
@@ -65,6 +74,7 @@ int num_files = 0;
 int pFD;
 //offset(address) of first block dedicated to pointing to free blocks
 short SUPERPTR = 257;
+short SPNEXT = 258;
 
 
 // Prototypes
@@ -190,8 +200,11 @@ int bv_destroy() {
   iNode node;
   //write iNodes to disk
   for(int i=0; i<256; i++){
-    node = 
+    node =  iNodeArray[i];
+    write(pFD, (void*)node, sizeof(iNode));
+    lseek(pFD, 512 - sizeof(iNode), SEEK_CURR);
   }
+  //free anything?
 
   //close file descriptor
   close(pFD);
@@ -229,8 +242,7 @@ int bv_open(const char *fileName, int mode) {
 
   //check mode
 
-  //
-
+  //increment file count
 
 }
 
@@ -254,6 +266,10 @@ int bv_open(const char *fileName, int mode) {
 int bv_close(int bvfs_FD) {
   //check if file exits - if not return -1
 
+  //decrement file count
+
+  //free up blocks used - add them back into the superblock
+
 }
 
 /*
@@ -274,6 +290,8 @@ int bv_close(int bvfs_FD) {
  *           prior to returning.
  */
 int bv_write(int bvfs_FD, const void *buf, size_t count) {
+
+  //take blocks out of superblock
 
 
 }
