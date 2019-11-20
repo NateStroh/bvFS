@@ -161,6 +161,7 @@ int bv_init(const char *fs_fileName) {
     else {
       // Something bad must have happened... check errno?
       fprintf(stderr, "%s", strerror(errno));
+      return -1;
     }
 
   } else {
@@ -285,9 +286,22 @@ int bv_open(const char *fileName, int mode) {
       //set up file descriptor
       fdt.isOpen = 1;
       fdt.mode = mode;
-      fdt.cursor = 0;
+            
+      if(mode == BV_WCONCAT){
+        ftd.cursor = iNodeArray[i].numBytes; 
+      }
+      else if(mode == BV_WTRUNC){
+        removeDiskMap(iNodeArray[i]);
+        fdt.cursor = 0;
+      }
+      else{
+        fdt.cursor = 0;
+      }
       //add it to the array
       fdTable[i] = fdt;
+      //increment file count
+      num_files ++;
+      return 0; 
     }
   }
   if(file == NULL){
@@ -315,10 +329,6 @@ int bv_open(const char *fileName, int mode) {
       return -1;
     }
   }
-
-  //increment file count
-  num_files ++;
-  return 0;
 }
 
 /*
