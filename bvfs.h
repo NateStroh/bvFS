@@ -340,10 +340,31 @@ int bv_open(const char *fileName, int mode) {
  */
 int bv_close(int bvfs_FD) {
   //check if file exits - if not return -1
+  if(!strcmp(iNodeArr[bvfs_ID]->name, NULL){
+    printf("File doesn't exist");
+  }else{
+    
+    //free up blocks used - add them back into the superblock
+    //Adds newly freed blocks to disk
+    removeDiskMap(iNodeArr[bvfs_ID]);
 
-  //decrement file count
+    //Reset the iNode
+    iNodeArr[bvfs_ID]->name = NULL;
+    iNodeArr[bvfs_ID]->numBytes = 0;
+    iNodeArr[bvfs_ID]->numBlocks = 0;
+    iNodeArr[bvfs_ID]->time = NULL;
+    iNodeArr[bvfs_ID]->blockAdresses = NULL;
+    
+    //Reset the file descriptor
+    fdTable[bvfs_ID]->mode = -1;
+    fdTable[bvfs_ID]->cursor = 0;
+    fdTable[bvfs_ID]->open = 0;
+    
+    //decrement file count
+    num_files --;
+    return 0;
+  }
 
-  //free up blocks used - add them back into the superblock
 
 }
 
