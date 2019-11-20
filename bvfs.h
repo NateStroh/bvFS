@@ -102,6 +102,10 @@ void removeDiskMap(iNode* file){
   SPNEXT = file->blockAddresses[1];
 }
 
+void getSuperBlock(){
+  
+  return;  
+}
 void buildMemStructs(int id){
   //Read super block ptr
   read(id, (void*)&SUPERPTR, sizeof(short));
@@ -115,7 +119,14 @@ void buildMemStructs(int id){
     read(id, (void*)&newNode, sizeof(iNode));
     lseek(id, (BLOCK_SIZE - sizeof(iNode)), SEEK_CUR);
     iNodeArray[i] = newNode;
+    
+    fdTable *fd = (fdTable *) malloc(sizeof(fdTable));
+    fd->mode = -1;
+    fd->cursor = 0;
+    fd->isOpen = 0;
+    fdtArr[i] = fd;
   }
+
 }
 /*
  * int bv_init(const char *fs_fileName);
@@ -189,8 +200,6 @@ int bv_init(const char *fs_fileName) {
 
     //set up all data structures in memory
     buildMemStructs(pFD);
-
-    printf("Created File\n");
   }
 }
 
@@ -213,14 +222,16 @@ int bv_destroy() {
   //write iNodes to disk
   for(int i=0; i<256; i++){
     node = iNodeArray[i];
+    lseek(pFD, 1, SEEK_SET);
     write(pFD, (void*)node, sizeof(iNode));
     lseek(pFD, 512 - sizeof(iNode), SEEK_CUR);
   }
-  //free anything?
+
+  //free fdTABLE and iNodes
   for(int i=0; i<256; i++){
     free(iNodeArray[i]);
+    free(fdtArr[i]);
   }
-  //TODO: free fdTABLE
 
   //close file descriptor
   close(pFD);
@@ -298,6 +309,10 @@ int bv_open(const char *fileName, int mode) {
     }
   }
   if(file == NULL){
+    if(mode == BV_RDONLY){
+      printf("Tried to read a file that deosn't exist\n");
+      return -1;
+    }
     if(num_files < 256){
       //file doesn't exist so make it
       iNode *node = (iNode *) malloc(sizeof(iNode));
@@ -343,23 +358,16 @@ int bv_open(const char *fileName, int mode) {
  */
 int bv_close(int bvfs_FD) {
   //check if file exits - if not return -1
+  if(fdtArr[bvfs_FD]->isOpen == 0){
+    printf("File is not open\n");
+    return -1;
+  }
+
   if(iNodeArray[bvfs_FD]->numBytes == -1){
-    printf("File doesn't exist");
+    printf("File doesn't exist\n");
     return -1;
   }else{
-    /* 
-    //free up blocks used - add them back into the superblock
-    //Adds newly freed blocks to disk
-    removeDiskMap(iNodeArr[bvfs_ID]);
-
-    //Reset the iNode
-    iNodeArray[bvfs_ID]->name = NULL;
-    iNodeArray[bvfs_ID]->numBytes = 0;
-    iNodeArray[bvfs_ID]->numBlocks = 0;
-    iNodeArray[bvfs_ID]->time = NULL;
-    iNodeArray[bvfs_ID]->blockAdresses = NULL;
-    //++){
-    */
+    
     //Reset the file descriptor
     fdtArr[bvfs_FD]->mode = -1;
     fdtArr[bvfs_FD]->cursor = 0;
@@ -391,10 +399,50 @@ int bv_close(int bvfs_FD) {
  *           prior to returning.
  */
 int bv_write(int bvfs_FD, const void *buf, size_t count) {
+  //checking if file is open
+  if(fdtArr[bvfs_FD]->isOpen == 0){
+    printf("File is not open\n"); 
+    return -1;
+  }
+  //checking if their is a file for this fd
+  if(iNodeArray[bvfs_FD]->numBytes == -1){
+    printf("File Doesn't exist\n");
+    return -1;
+  }
+  //checking mode
+  if(fdtArr[bvfs_FD]->mode == BV_RDONLY){
+    printf("File opened in wrong mode");
+    return -1;
+  }
+  else{
+    //should be to the point where we can right 
+    int bytesWritten = count;
+    int totalBytesWritten = 0;  
+    while(bytesWritten != 0){
+      int targetBlock = fdtArr[bvfs_FD]->cursor / BLOCK_SIZE;
+      int blockOffset = fdtArr[bvfs_FD]->cursor % BLOCK_SIZE;
+      int spaceLeft = BLOCK_SIZE-blockOffset; 
+      int offset = iNodeArray[bvfs_FD]->blockAddresses[targetBlock]; 
+      lseek(pFD, offset*BLOCK_SIZE, SEEK_SET);
+      if(bytesWritten > spaceLeft){
+        //TODO:get superblock
+        //int newBlockID = getSuperBlock();
+        //iNodeArray[bvfs_FD]->blockAddresses[targetBlock+1] = newBlockID;
+        printf("hope you didnt\n");
+      }
+      if(bytesWritten <= spaceLeft){
+        write(pFD, buf+bytesWritten, bytesWritten);
+      }
+      totalBytesWritten +=bytesWritten;
+      fdtArr[bvfs_FD]->cursor += bytesWritten; 
+    }
+    //Update iNode with appropriate numBytes and timestamp
+    iNodeArray[bvfs_FD]->numBytes += totalBytesWritten;
+    iNodeArray[bvfs_FD]->time += time(NULL);
 
-  //take blocks out of superblock
+    return totalBytesWritten;
 
-
+  }
 }
 
 /*
@@ -416,8 +464,58 @@ int bv_write(int bvfs_FD, const void *buf, size_t count) {
  */
 int bv_read(int bvfs_FD, void *buf, size_t count) {
   //check if file is open
+  if(fdtArr[bvfs_FD]->isOpen == 0){
+    printf("File is not open\n");
+    return -1;
+  }
+  //check if file exists
+  if(iNodeArray[bvfs_FD]->numBytes == -1){
+    printf("File doesn't exist\n");
+    return -1;
+  }
+  if(fdtArr[bvfs_FD]->cursor + count >  iNodeArray[bvfs_FD]->numBytes){
+    printf("Asking to read more than the size of current file\n");
+    return -1;
+  }
+  //check mode
+  if(fdtArr[bvfs_FD]->mode == BV_RDONLY){
+    //while theres still blocks to read
+    int bytesLeft = count;
+    int totalBytesRead =0;  
+    while(bytesLeft != 0){
+      
+      int bytesRead = 0;
+      int targetBlock = fdtArr[bvfs_FD]->cursor / BLOCK_SIZE;
+      int blockOffset = fdtArr[bvfs_FD]->cursor % BLOCK_SIZE;
+      int spaceLeft = BLOCK_SIZE-blockOffset; 
+      int offset = iNodeArray[bvfs_FD]->blockAddresses[targetBlock]; 
+      //Seek to new block
+      lseek(pFD, offset*BLOCK_SIZE, SEEK_CUR); 
+      //If spaace left in current block read it all 
+      if(bytesLeft <= spaceLeft){
+        bytesRead += read(pFD, buf + totalBytesRead, bytesLeft);
+      }
+      //Not enough space left in current block reading what we can then
+      else{
+        bytesRead += read(pFD, buf + totalBytesRead,spaceLeft);
+      }
+      //Decrease the bytes left to read
+      bytesLeft -= bytesRead;
+      
+      //Increase cursor count 
+      fdtArr[bvfs_FD]->cursor +=bytesRead;
+      
+      //Increase the number of bytes read
+      totalBytesRead += bytesRead;
 
-  //
+    }
+    return totalBytesRead;
+  }
+  else{
+    printf("File wasn't opened in read mode\n");
+    return -1;
+  }
+   
 
 }
 
@@ -448,6 +546,7 @@ int bv_unlink(const char* fileName) {
 
   //if file never got set, we didn't have that filename - so return -1
   if(file == NULL){
+    printf("couldn't find that file to delete\n");
     return -1;
   }
   removeDiskMap(file);
