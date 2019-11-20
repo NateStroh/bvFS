@@ -102,7 +102,9 @@ void buildMemStructs(int id){
     iNodeArray[i] = newNode;
   }
 }
+void getTime(){
 
+}
 /*
  * int bv_init(const char *fs_fileName);
  *
@@ -314,7 +316,7 @@ int bv_write(int bvfs_FD, const void *buf, size_t count) {
  *           prior to returning.
  */
 int bv_read(int bvfs_FD, void *buf, size_t count) {
-  //check if file is open
+  //check if file is open  
   
   //
 
