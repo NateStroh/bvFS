@@ -34,21 +34,21 @@
 #include <fcntl.h>
 
 
-//TODO: superblock struct
+//TODO: superblock struct?
 
 
 //TODO: fileDescriptor struct
 struct fdTable{
-  int fileDescriptor;
   int cursor;
-  
+  int mode;
+  int isOpen;
+
 } typedef fdTable;
 
 
 //TODO: padding?
 //Structs
 struct iNode{
-  short pos;
   char name[32];
   int numBytes;
   short numBlocks;
@@ -70,12 +70,12 @@ const int MAX_FILES = 256;
 
 //Globals
 iNode iNodeArray[256];
+fdTable fdtArr[256];
 int num_files = 0;
 int pFD;
 //offset(address) of first block dedicated to pointing to free blocks
 short SUPERPTR = 257;
 short SPNEXT = 258;
-
 
 // Prototypes
 int bv_init(const char *fs_fileName);
@@ -87,6 +87,25 @@ int bv_read(int bvfs_FD, void *buf, size_t count);
 int bv_unlink(const char* fileName);
 void bv_ls();
 
+void removeDiskMap(iNode i){
+  //Loop through blockAddresses contained in the iNode while i< numberOfBlocks
+  SUPERPTR = file.blockAddresses[0];
+  lseek(pFD, 0, SEEK_SET);
+  write(pFD, (void *)&SUPERPTR, sizeof(short));
+  for(int i=0; i<file.numBlocks-1; i++;){
+    //Seek to one of the file blocks (blockAddresses[i])
+    lseek(pFD, (BLOCK_SIZE * blockAddresses[i]), SEEK_CUR);
+    //Write blockAddresses[i+1] to the block we seeked to 
+    write(pFD, (void *)&blockAddresses[i+1], sizeof(short));
+  }
+
+  //seek to the last item in the diskmap and add next items "address" after the last block
+  lseek(pFD, (BLOCK_SIZE * blockAddresses[file.numBlocks]), SEEK_CUR);
+  write(pFD, (void*)SPNEXT, sizeof(short));
+  //set the next address
+  SPNEXT = blockAddresses[1];
+}
+
 void buildMemStructs(int id){
   //Read super block ptr
   read(id, (void*)&SUPERPTR, sizeof(short));
@@ -96,7 +115,7 @@ void buildMemStructs(int id){
 
   //Read iNodes from Disk
   for(int i=0; i<256; i++){
-    iNode newNode;
+    iNode *newNode = malloc(sizeof(iNode));
     read(id, (void*)&newNode, sizeof(iNode));
     seek(id, (BLOCK_SIZE - sizeof(iNode)), SEEK_CUR);
     iNodeArray[i] = newNode;
@@ -138,11 +157,8 @@ int bv_init(const char *fs_fileName) {
       buildMemStructs(pFD);
     }
     else {
-      // TODO: no clue if this is right just yet
       // Something bad must have happened... check errno?
-      char *err = strerror(errno);
-      write(2, err, strlen(err));
-      write(1, "\n", 1);
+      fprintf(stderr, "%s", strerror(errno));
     }
 
   } else {
@@ -151,7 +167,7 @@ int bv_init(const char *fs_fileName) {
     //write 2 bytes for first superBlock ptr
     write(pFD, (void*)((short) 257), sizeof(short));
     //seek to next block
-    lseek(pFD, 510, SEEK_CURR);
+    lseek(pFD, 510, SEEK_CUR);
 
     //write inodes
     iNode node;
@@ -164,7 +180,7 @@ int bv_init(const char *fs_fileName) {
       write(pFD, (void*)node, sizeof(iNode));
 
       //seek to next iNode location
-      lseek(pFD, 512 - sizeof(iNode), SEEK_CURR); 
+      lseek(pFD, 512 - sizeof(iNode), SEEK_CUR); 
     }
 
     //write remaining superBlock pointers - 2 bytes pointing to the next super block
@@ -172,7 +188,7 @@ int bv_init(const char *fs_fileName) {
       //write short of next free block (very next block in this case)
       write(pFD, (void*)(i+1), sizeof(short));
       //seek to the next block
-      lseek(pFD, 510, SEEK_CURR);
+      lseek(pFD, 510, SEEK_CUR);
     }
 
     //set up all data structures in memory
@@ -202,9 +218,13 @@ int bv_destroy() {
   for(int i=0; i<256; i++){
     node =  iNodeArray[i];
     write(pFD, (void*)node, sizeof(iNode));
-    lseek(pFD, 512 - sizeof(iNode), SEEK_CURR);
+    lseek(pFD, 512 - sizeof(iNode), SEEK_CUR);
   }
   //free anything?
+  for(int i=0; i<256; i++){
+    free(iNodeArray[i]);
+  }
+  //TODO: free fdTABLE
 
   //close file descriptor
   close(pFD);
@@ -238,12 +258,65 @@ int BV_WTRUNC = 2;
  *           stderr prior to returning.
  */
 int bv_open(const char *fileName, int mode) {
-  //check if we need to create the file or not
+  if(strlen(filename) >= 31){
+    printf("Filename to long\n");
+    return -1
+  }
+  if(mode > 2 || mode < 0){
+    printf("Invalid  Mode\n");
+    return -1;
+  }
 
-  //check mode
+  //check if we need to create the file or not
+  iNode file = NULL;
+  fdTable fdt = NULL;
+  for(int i=0; i<256; i++){
+    if(!strcmp(iNodeArray[i]->name, filename)){
+      //found a file with that name
+      file = iNodeArray[i];
+      fdt = fdTable[i];
+      //check if the file is already open 
+      if(fdt.isOpen == 1){
+        printf("File is already open\n");
+        return -1;
+      }
+      //set up file descriptor
+      fdt.isOpen = 1;
+      fdt.mode = mode;
+      fdt.cursor = 0;
+      //add it to the array
+      fdTable[i] = fdt;
+    }
+  }
+  if(file == NULL){
+    if(num_files < 256){
+      //file doesn't exist so make it
+      iNode *node = malloc(sizeof(iNode));
+      node->name = filename;
+      node->time = time(NULL);
+      for(int j=0; j<256; j++){
+        if(strcmp(iNodeArray[j]->name, "NULL") == 0){
+          iNodeArray[j] = node;
+          //set up file descriptor
+          fdt.isOpen = 1;
+          fdt.mode = mode;
+          fdt.cursor = 0;
+          //add it to the array
+          fdTable[j] = fdt;
+          num_files ++;
+          return 0;
+        }
+      }
+    }
+    else{
+      printf("Too many files already exist - hit maximum\n");
+      return -1;
+    }
+  }
 
   //increment file count
-
+  num_files ++;
+  return 0;
 }
 
 /*
@@ -315,7 +388,7 @@ int bv_write(int bvfs_FD, const void *buf, size_t count) {
  */
 int bv_read(int bvfs_FD, void *buf, size_t count) {
   //check if file is open
-  
+
   //
 
 }
@@ -349,18 +422,7 @@ int bv_unlink(const char* fileName) {
   if(file == NULL){
     return -1;
   }
-
-  //Loop through blockAddresses contained in the iNode while i< numberOfBlocks
-  
-  for(int i=0; i<file.numBlocks; i++;){
-    //Seek to one of the file blocks (blockAddresses[i])
-    lseek(pFD, (BLOCK_SIZE * blockAddresses[i]), SEEK_CUR);
-    //Write blockAddresses[i+1] to the block we seeked to 
-    write(pFD, (void *)&blockAddresses[i+1], sizeof(short));
-  }
-
-  lseek(pFD, (BLOCK_SIZE * blockAddresses[file.numBlocks]), SEEK_CUR);
-  
+  removeDiskMap(iNode file);
   return 0;
 }
 
