@@ -6,6 +6,9 @@ bvfs_tester: bvfs_tester.cpp bvfs.h
 run: bvfs_tester
 	./bvfs_tester
 
+run12: bvfs_tester
+	./bvfs_tester 12
+
 
 clean:
 	@echo "Cleaning..."

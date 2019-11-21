@@ -200,6 +200,7 @@ int bv_init(const char *fs_fileName) {
     //write inodes
     iNode node;
     for(int i=0; i<256; i++){
+      bzero(&node, sizeof(node));
       node.numBytes = -1;
       //node.pos = i+1;
 
@@ -612,12 +613,18 @@ int bv_unlink(const char* fileName) {
  *   void
  */
 void bv_ls() {
+  printf("beep\n");
   printf("| %d Files\n", num_files);
   //Loop through iNodes and print info about them
   for(int i=0; i<MAX_FILES; i++){
     iNode *curr = iNodeArray[i]; 
     if(curr->numBytes != -1){
-      printf("| bytes: %d, blocks: %d, %.24s, %c\n", curr->numBytes,  ceil(curr->numBytes/BLOCK_SIZE), curr->time, curr->name);
+      printf("ping\n");
+      int numBlocks = curr->numBytes / BLOCK_SIZE;
+      if (curr->numBytes % BLOCK_SIZE != 0)
+        numBlocks++;
+      //printf("| bytes: %d, blocks: %d, %.24s, %c\n", curr->numBytes,  ceil(curr->numBytes/BLOCK_SIZE), curr->time, curr->name);
+      printf("| bytes: %d, blocks: %d, %.24s, %s\n", curr->numBytes,  numBlocks, ctime(&(curr->time)), curr->name);
     }
   }
 }
