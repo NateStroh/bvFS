@@ -80,35 +80,39 @@ int bv_read(int bvfs_FD, void *buf, size_t count);
 int bv_unlink(const char* fileName);
 void bv_ls();
 
+//function to remove blocks from an iNodes diskmap - put them back in super block
 void removeDiskMap(iNode* file){
   int SPNEXT = SUPERPTR;
-  //Loop through blockAddresses contained in the iNode while i< numberOfBlocks
+  
+  //set head to begining of freed blocks
   SUPERPTR = file->blockAddresses[0];
   lseek(pFD, 0, SEEK_SET);
   write(pFD, (void*)&SUPERPTR, sizeof(short));
   
-  
+  //link blocks in iNode together
   for(int i=0; i<file->numBlocks-1; i++){
     //Seek to one of the file blocks (blockAddresses[i])
     lseek(pFD, (BLOCK_SIZE * file->blockAddresses[i]), SEEK_SET);
     //Write blockAddresses[i+1] to the block we seeked to 
     write(pFD, (void *)&(file->blockAddresses[i+1]), sizeof(short));
   }
-
+  
+  //set end of now free blocks to the rest of the super block list
   lseek(pFD, (BLOCK_SIZE * file->blockAddresses[file->numBlocks-1]), SEEK_SET);
   write(pFD, (void *)&SPNEXT, sizeof(short));
 }
 
+//function to get the next free block and take it out of the super block list - returns block that is "theirs" to write to 
 short getSuperBlock(){
-  
   //No super blocks left
   if(SUPERPTR == 16385){ 
     return -1;
   }
-
+  
   short val = SUPERPTR;
   short tmp;
-
+  
+  //seek to next free block - put it in tmp
   lseek(pFD,  SUPERPTR * BLOCK_SIZE, SEEK_SET);
   read(pFD, (void *)&tmp, sizeof(short));
   
@@ -116,11 +120,14 @@ short getSuperBlock(){
   lseek(pFD, 0, SEEK_SET);
   write(pFD, (void*)&tmp, sizeof(short));
   
+  //set SUPER global and return
   SUPERPTR = tmp;
   return val;  
 }
 
+//helper function to load data structures we use from disk into memory
 void buildMemStructs(int id){
+  //seek to begining of partition - posistion of super block
   lseek(id, 0, SEEK_SET);
   //Read super block ptr
   read(id, (void*)&SUPERPTR, sizeof(short));
@@ -132,7 +139,8 @@ void buildMemStructs(int id){
     read(id, (void*)newNode, sizeof(iNode));
     lseek(id, (BLOCK_SIZE - sizeof(iNode)), SEEK_CUR); 
     iNodeArray[i] = newNode;
-     
+    
+    //malloc and intialize filedescriptors
     fdTable *fd = (fdTable *) malloc(sizeof(fdTable));
     fd->mode = -1;
     fd->cursor = 0;
@@ -183,7 +191,6 @@ int bv_init(const char *fs_fileName) {
 
   } else {
     // File did not previously exist but it does now. Write data to it 
-    //printf("file doesn't exist -- init\n");
     //write 2 bytes for first superBlock ptr
     short temp = 257;
     write(pFD, (void*)&temp, sizeof(short));
@@ -215,6 +222,7 @@ int bv_init(const char *fs_fileName) {
     //set up all data structures in memory
     buildMemStructs(pFD);
    
+    //intialize numBytes for every iNode - its used to check if that iNode is assigned a file
     for(int i=0; i<256; i++){
       iNodeArray[i]->numBytes = -1;
     }
@@ -237,6 +245,7 @@ int bv_init(const char *fs_fileName) {
  */
 int bv_destroy() {
   iNode *node;
+  //seek past first superblock
   lseek(pFD, BLOCK_SIZE, SEEK_SET);
   //write iNodes to disk
   for(int i=0; i<256; i++){
@@ -420,7 +429,7 @@ int bv_write(int bvfs_FD, const void *buf, size_t count) {
   }
   //checking mode
   if(fdtArr[bvfs_FD]->mode == BV_RDONLY){
-    printf("File opened in wrong mode");
+    printf("File opened in wrong mode\n");
     return -1;
   }
   else{
@@ -436,7 +445,7 @@ int bv_write(int bvfs_FD, const void *buf, size_t count) {
       if(blockOffset == 0){
         short newBlockID = getSuperBlock();
         if(newBlockID == -1){
-          printf("NO BLOCKS LEFT");
+          //printf("NO BLOCKS LEFT");
           return bytesWritten;
         }
         iNodeArray[bvfs_FD]->blockAddresses[targetBlock] = newBlockID;
@@ -459,7 +468,6 @@ int bv_write(int bvfs_FD, const void *buf, size_t count) {
     //Update iNode with appropriate numBytes and timestamp
     iNodeArray[bvfs_FD]->numBytes += totalBytesWritten;
     iNodeArray[bvfs_FD]->time = time(NULL);
-    //printf("%d\n",totalBytesWritten);
     return totalBytesWritten;
   }
 }
@@ -517,10 +525,10 @@ int bv_read(int bvfs_FD, void *buf, size_t count) {
       else{
         bytesRead += read(pFD, buf + totalBytesRead,spaceLeft);
       }
-      if(bytesRead == 0) {
-        printf("Read 0 for some reason\n");
-        return -1;
-      }
+      //if(bytesRead == 0) {
+      //  printf("Read 0\n");
+      //  return -1;
+      //}
       //Decrease the bytes left to read
       bytesLeft -= bytesRead;
       

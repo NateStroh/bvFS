@@ -379,10 +379,11 @@ vector<void (*)()> testSuite {
     WRITE(fd, inData, sizeof(inData));
     CLOSE(fd);
 
-    *out << "lololol" << endl;
+    *out << "before" << endl;
     redirectOutput();
-    *out << "lololol" << endl;
+    *out << "after" << endl;
     bv_ls();
+    *out << "after ls" << endl;
     string output = restoreOutput();
 
     if (output.size() == 0)
