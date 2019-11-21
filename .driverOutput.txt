@@ -12,4 +12,11 @@ Test 18: [write to partion1, then partition2, read from p1, then from p2]
   bv_destroy()
   bv_init("testPartition1.bvfs")
   bv_open("somefile.data", BV_RDONLY)
-  [31mFailed[0m: bv_open failed to open file and returning-1
+  bv_read(fd, buf, 4)
+  bv_close(0)
+  bv_destroy()
+  bv_init("testPartition2.bvfs")
+  bv_open("somefile.data", BV_RDONLY)
+  bv_read(fd, buf, 4)
+  bv_close(0)
+  bv_destroy()

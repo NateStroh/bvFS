@@ -41,8 +41,6 @@ struct fdTable{
 
 } typedef fdTable;
 
-
-//TODO: padding?
 //Structs
 struct iNode{
   char name[32];
@@ -123,6 +121,7 @@ short getSuperBlock(){
 }
 
 void buildMemStructs(int id){
+  lseek(id, 0, SEEK_SET);
   //Read super block ptr
   read(id, (void*)&SUPERPTR, sizeof(short));
   //Seek to second block
@@ -170,10 +169,8 @@ int bv_init(const char *fs_fileName) {
   pFD = open(fs_fileName, O_CREAT | O_RDWR | O_EXCL, 0644);
   if (pFD < 0) {
     if (errno == EEXIST) {
-      //printf("File exists\n");
       // File already exists. Open it and read info (integer) back
       pFD = open(fs_fileName, O_CREAT | O_RDWR , S_IRUSR | S_IWUSR);
-      //printf("FILE OPEN\n");
       //read files from 
       buildMemStructs(pFD);
 
@@ -188,7 +185,8 @@ int bv_init(const char *fs_fileName) {
     // File did not previously exist but it does now. Write data to it 
     //printf("file doesn't exist -- init\n");
     //write 2 bytes for first superBlock ptr
-    write(pFD, (void*)((short) 257), sizeof(short));
+    short temp = 257;
+    write(pFD, (void*)&temp, sizeof(short));
     //seek to next block
     lseek(pFD, 510, SEEK_CUR);
 
@@ -239,10 +237,10 @@ int bv_init(const char *fs_fileName) {
  */
 int bv_destroy() {
   iNode *node;
+  lseek(pFD, BLOCK_SIZE, SEEK_SET);
   //write iNodes to disk
   for(int i=0; i<256; i++){
     node = iNodeArray[i];
-    lseek(pFD, 1, SEEK_SET);
     write(pFD, (void*)node, sizeof(iNode));
     lseek(pFD, 512 - sizeof(iNode), SEEK_CUR);
   }
@@ -298,7 +296,7 @@ int bv_open(const char *fileName, int mode) {
   iNode *file = NULL;
   fdTable *fdt = NULL;
   for(int i=0; i<256; i++){
-    if(!strcmp(iNodeArray[i]->name, fileName)){
+    if(!strcmp(iNodeArray[i]->name, fileName) && iNodeArray[i]->numBytes != -1){
       //found a file with that name
       file = iNodeArray[i];
       fdt = fdtArr[i];
@@ -381,13 +379,13 @@ int bv_close(int bvfs_FD) {
     printf("File doesn't exist\n");
     return -1;
   }else{
-    
+  
     //Reset the file descriptor
     fdtArr[bvfs_FD]->mode = -1;
     fdtArr[bvfs_FD]->cursor = 0;
     fdtArr[bvfs_FD]->isOpen = 0;
     
-    //decrement file count
+    
     return 0;
   }
 }
@@ -427,13 +425,6 @@ int bv_write(int bvfs_FD, const void *buf, size_t count) {
   }
   else{
     //should be to the point where we can right 
-    //printf("else %s\n",fdtArr[bvfs_FD]->cursor );
-    /*if(fdtArr[bvfs_FD]->cursor == 0){
-      //printf("NEW FILE, GIVING IT A NEW BLOCK %d\n", iNodeArray[bvfs_FD]->numBytes); 
-      short newBlockID = getSuperBlock();
-      iNodeArray[bvfs_FD]->blockAddresses[0] = newBlockID;
-    } */
-
     
     int bytesToWrite = count;
     int totalBytesWritten = 0;  
@@ -527,7 +518,7 @@ int bv_read(int bvfs_FD, void *buf, size_t count) {
         bytesRead += read(pFD, buf + totalBytesRead,spaceLeft);
       }
       if(bytesRead == 0) {
-        printf("Something very bad hapenned. we cannot read from filesys\n");
+        printf("Read 0 for some reason\n");
         return -1;
       }
       //Decrease the bytes left to read
@@ -547,7 +538,6 @@ int bv_read(int bvfs_FD, void *buf, size_t count) {
     return -1;
   }
    
-
 }
 
 /*
@@ -581,6 +571,8 @@ int bv_unlink(const char* fileName) {
     return -1;
   }
   removeDiskMap(file);
+  file->numBytes = -1;
+
   num_files--;
   return 0;
 }

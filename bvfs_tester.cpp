@@ -379,7 +379,9 @@ vector<void (*)()> testSuite {
     WRITE(fd, inData, sizeof(inData));
     CLOSE(fd);
 
+    *out << "lololol" << endl;
     redirectOutput();
+    *out << "lololol" << endl;
     bv_ls();
     string output = restoreOutput();
 
@@ -687,14 +689,22 @@ void die(string str, string val) {
 int __tempSTDOUT;
 int __tempSTDERR;
 void redirectOutput() {
+  *out << 1 << endl;
   __tempSTDOUT = dup(1); // Copy stdout
+  *out << 2 << endl;
   __tempSTDERR = dup(2); // Copy stderr
+  *out << 3 << endl;
   close(1);  // Close original stdout
+  *out << 4 << endl;
   close(2);  // Close original stderr
+  *out << 5 << endl;
 
   unlink(".stdout-stderr.txt");
+  *out << 6 << endl;
   open(".stdout-stderr.txt", O_WRONLY | O_CREAT, 0644);
+  *out << 7 << endl;
   dup2(1,2); // Open file for writing for stdout & stderr
+  *out << 8 << endl;
 }
 
 string restoreOutput() {
