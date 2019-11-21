@@ -45,7 +45,7 @@ struct fdTable{
 struct iNode{
   char name[32];
   int numBytes;
-  short numBlocks;
+  int numBlocks;
   time_t time;
   //File can only be 128 blocks long
   short blockAddresses[128];
@@ -67,7 +67,6 @@ iNode* iNodeArray[256];
 fdTable* fdtArr[256];
 int num_files = 0;
 int pFD;
-//offset(address) of first block dedicated to pointing to free blocks
 short SUPERPTR = 257;
 
 // Prototypes
@@ -190,7 +189,7 @@ int bv_init(const char *fs_fileName) {
     }
 
   } else {
-    // File did not previously exist but it does now. Write data to it 
+    // File did not previously exist
     //write 2 bytes for first superBlock ptr
     short temp = 257;
     write(pFD, (void*)&temp, sizeof(short));
@@ -202,7 +201,6 @@ int bv_init(const char *fs_fileName) {
     for(int i=0; i<256; i++){
       bzero(&node, sizeof(node));
       node.numBytes = -1;
-      //node.pos = i+1;
 
       //write it to file
       write(pFD, (void*)&node, sizeof(iNode));
@@ -211,7 +209,7 @@ int bv_init(const char *fs_fileName) {
       lseek(pFD, 512 - sizeof(iNode), SEEK_CUR); 
     }
 
-    //write remaining superBlock pointers - 2 bytes pointing to the next super block
+    //write remaining superBlock pointers - 2 bytes pointing to the next free block
     for(int i=257; i<16384; i++){
       //write short of next free block (very next block in this case)
       int j=i+1;
@@ -318,31 +316,41 @@ int bv_open(const char *fileName, int mode) {
       //set up file descriptor
       fdt->isOpen = 1;
       fdt->mode = mode;
-            
+      //check file mode      
       if(mode == BV_WCONCAT){
+        //concat - set cursor to end of that file
         fdt->cursor = iNodeArray[i]->numBytes; 
       }
       else if(mode == BV_WTRUNC){
+        //truncate - erase all data (and blocks) set cursor to 0
         removeDiskMap(iNodeArray[i]);
         fdt->cursor = 0;
       }
       else{
+        //else it is a read so set cursor to 0
         fdt->cursor = 0;
       }
       //add it to the array
       fdtArr[i] = fdt;
+      //return fileDescriptor id of sorts - just its posistion in the array
       return i; 
     }
   }
+
+  //if it gets this far the file doesn't exist
   if(mode == BV_RDONLY){
+    //cant open a new file to read from
     printf("Tried to read a file that deosn't exist\n");
     return -1;
   }
   if(num_files < 256){
     //file doesn't exist so make it
     for(int j=0; j<256; j++){
+      //get first unused iNode
       if(iNodeArray[j]->numBytes == -1){
+        //setting file name
         strcpy(iNodeArray[j]->name, fileName);
+        //set up iNode including its time
         iNodeArray[j]->time = time(NULL);
         iNodeArray[j]->numBytes = 0;
         //set up file descriptor
@@ -356,6 +364,7 @@ int bv_open(const char *fileName, int mode) {
     }
   }
   else{
+    //else there are 256 other files so we hit the max
     printf("Too many files already exist - hit maximum\n");
     return -1;
   }
@@ -384,17 +393,16 @@ int bv_close(int bvfs_FD) {
     printf("File is not open\n");
     return -1;
   }
-
+  //file doesnt exist
   if(iNodeArray[bvfs_FD]->numBytes == -1){
     printf("File doesn't exist\n");
     return -1;
-  }else{
-  
+  }
+  else{
     //Reset the file descriptor
     fdtArr[bvfs_FD]->mode = -1;
     fdtArr[bvfs_FD]->cursor = 0;
     fdtArr[bvfs_FD]->isOpen = 0;
-    
     
     return 0;
   }
@@ -420,7 +428,7 @@ int bv_close(int bvfs_FD) {
 int bv_write(int bvfs_FD, const void *buf, size_t count) {
   //checking if file is open
   if(fdtArr[bvfs_FD]->isOpen == 0){
-    printf("File is not open -- WRITE %d\n",bvfs_FD); 
+    printf("File is not open %d\n",bvfs_FD); 
     return -1;
   }
   //checking if their is a file for this fd
@@ -434,33 +442,37 @@ int bv_write(int bvfs_FD, const void *buf, size_t count) {
     return -1;
   }
   else{
-    //should be to the point where we can right 
+    //should be to the point where we can write 
     
     int bytesToWrite = count;
     int totalBytesWritten = 0;  
     while(bytesToWrite != 0){
+      //Create variables
       int targetBlock = fdtArr[bvfs_FD]->cursor / BLOCK_SIZE;
       int blockOffset = fdtArr[bvfs_FD]->cursor % BLOCK_SIZE;
       int spaceLeft = BLOCK_SIZE-blockOffset; 
       int bytesWritten = 0;
       if(blockOffset == 0){
         short newBlockID = getSuperBlock();
+        //Check if there are any blocks free
         if(newBlockID == -1){
-          //printf("NO BLOCKS LEFT");
+          printf("NO BLOCKS LEFT\n");
           return bytesWritten;
         }
         iNodeArray[bvfs_FD]->blockAddresses[targetBlock] = newBlockID;
       }
-
+      //Seek to correct block
       int offset = iNodeArray[bvfs_FD]->blockAddresses[targetBlock]; 
       lseek(pFD, (offset*BLOCK_SIZE) + blockOffset, SEEK_SET);
+      
+      //Write bytes to the disk
       if(bytesToWrite < spaceLeft){
         bytesWritten = write(pFD, buf+totalBytesWritten, bytesToWrite);
         
       }else{
         bytesWritten = write(pFD, buf+totalBytesWritten, spaceLeft);
       }
-
+      //Update variables
       totalBytesWritten += bytesWritten;
       bytesToWrite -= bytesWritten;
       fdtArr[bvfs_FD]->cursor += bytesWritten; 
@@ -501,6 +513,7 @@ int bv_read(int bvfs_FD, void *buf, size_t count) {
     printf("File doesn't exist\n");
     return -1;
   }
+  //Asking to read more bytes than exist
   if(fdtArr[bvfs_FD]->cursor + count >  iNodeArray[bvfs_FD]->numBytes){
     printf("Asking to read more than the size of current file\n");
     return -1;
@@ -511,6 +524,7 @@ int bv_read(int bvfs_FD, void *buf, size_t count) {
     int bytesLeft = count;
     int totalBytesRead =0;  
     while(bytesLeft != 0){
+      //Variables -- we might not use them all
       int bytesRead = 0;
       int targetBlock = fdtArr[bvfs_FD]->cursor / BLOCK_SIZE;
       int blockOffset = fdtArr[bvfs_FD]->cursor % BLOCK_SIZE;
@@ -526,10 +540,6 @@ int bv_read(int bvfs_FD, void *buf, size_t count) {
       else{
         bytesRead += read(pFD, buf + totalBytesRead,spaceLeft);
       }
-      //if(bytesRead == 0) {
-      //  printf("Read 0\n");
-      //  return -1;
-      //}
       //Decrease the bytes left to read
       bytesLeft -= bytesRead;
       
@@ -546,7 +556,6 @@ int bv_read(int bvfs_FD, void *buf, size_t count) {
     printf("File wasn't opened in read mode\n");
     return -1;
   }
-   
 }
 
 /*
@@ -568,18 +577,20 @@ int bv_unlink(const char* fileName) {
   iNode *file = NULL;
   //Loop through iNode Array
   for(int i=0; i<256; i++){
+    //find if we have a file with that name
     if(!strcmp(iNodeArray[i]->name, fileName)){
-      //printf("Found the correct file\n");
       file = iNodeArray[i];
     }
   }
 
-  //if file never got set, we didn't have that filename - so return -1
+  //if file never got set so we didn't have that filename - so return -1
   if(file == NULL){
     printf("couldn't find that file to delete\n");
     return -1;
   }
+  //"free" all the blocks it had 
   removeDiskMap(file);
+  //set the iNode back to unused state
   file->numBytes = -1;
 
   num_files--;
@@ -613,17 +624,15 @@ int bv_unlink(const char* fileName) {
  *   void
  */
 void bv_ls() {
-  printf("beep\n");
   printf("| %d Files\n", num_files);
   //Loop through iNodes and print info about them
   for(int i=0; i<MAX_FILES; i++){
-    iNode *curr = iNodeArray[i]; 
+    iNode *curr = iNodeArray[i];
+    //if the iNode points to a file
     if(curr->numBytes != -1){
-      printf("ping\n");
       int numBlocks = curr->numBytes / BLOCK_SIZE;
       if (curr->numBytes % BLOCK_SIZE != 0)
         numBlocks++;
-      //printf("| bytes: %d, blocks: %d, %.24s, %c\n", curr->numBytes,  ceil(curr->numBytes/BLOCK_SIZE), curr->time, curr->name);
       printf("| bytes: %d, blocks: %d, %.24s, %s\n", curr->numBytes,  numBlocks, ctime(&(curr->time)), curr->name);
     }
   }
